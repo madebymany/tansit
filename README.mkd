@@ -1,0 +1,55 @@
+# Tansit
+
+deb-s3 as-a-service.
+
+Note this is intentionally single-threaded. The point of this service is to
+serialise usage of deb-s3 so that race conditions are avoided. However,
+races only happen over one bucket, so this could be made more intelligent
+and parallelise calls made to separate buckets.
+
+## Protocol
+
+This is a bit of an experiment with ZeroMQ. "Why didn't you just use HTTP?", you might ask. Well, it's an experiment, like I said. Did it succeed? Well, the file transfer is the only questionable bit, I think. Anyway, here you go:
+
+### Request
+
+Send two message parts. The first is either `command`, for a serialised deb-s3 command, or `pkgdata` for a package upload chunk. The second part is a JSON-encoded object for a command, or a raw byte array for the package data. Chunk size is determined by the client. Send an empty chunk to indicate the end of the file and to start uploading.
+
+Command JSON object keys are:
+
+* `cmd`: deb-s3 subcommand
+* `cmd_args`: an array of strings giving the positional arguments to deb-s3
+* `cmd_opts`: an object of string options to their values
+* If the subcommand is `upload`, also:
+  * `package_file_name`: the original file name of the package to be sent
+  * `package_file_sha256`: the SHA-256 hash of the package file
+
+### Response
+
+A single frame, containing a JSON object with keys:
+
+* `success`: a boolean.
+* `message`: if necessary, a message saying what went wrong or well.
+* `command_output`: if deb-s3 ran, the full output from stdout and stderr.
+
+### Flow
+
+Create a DEALER socket and connect. For commands other than `upload`, simply send a request and get a response. Pipes indicate ZeroMQ message part boundary:
+
+```
+C: command | {"cmd": "list", "cmd_opts": {"long": "true", "bucket": "my-apt-repo"}}
+S: {"success": true, "command_output": "Package: asdfasdf\n..."}
+```
+
+For `upload`, send the request, get an "ok" response, then send the package data:
+
+```
+C: command | {"cmd": "upload", "cmd_opts": {"bucket": "my-apt-repo"}, "package_file_name": "package-1.2.3.deb", "package_file_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+S: {"success": true, "message": "OK, send package data"}
+C: pkgdata | \x01\x02\x03
+C: pkgdata | \x04\x05\x06
+C: pkgdata | [empty]
+S: {"success": true, "command_output": "Uploading....done"}
+```
+
+Note that you don't give the package path in `cmd_args`; Tansit will do that for you. Please set a low-ish sending high-water mark on your client socket otherwise you'll kill the server and messages will drop and it won't work.
