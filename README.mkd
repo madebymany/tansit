@@ -1,4 +1,4 @@
-# Tansit
+# Tansit
 
 deb-s3 as-a-service.
 
@@ -11,7 +11,7 @@ and parallelise calls made to separate buckets.
 
 This is a bit of an experiment with ZeroMQ. "Why didn't you just use HTTP?", you might ask. Well, it's an experiment, like I said. Did it succeed? Well, the file transfer is the only questionable bit, I think. Anyway, here you go:
 
-### Request
+### Request
 
 Send two message parts. The first is either `command`, for a serialised deb-s3 command, or `pkgdata` for a package upload chunk. The second part is a JSON-encoded object for a command, or a raw byte array for the package data. Chunk size is determined by the client. Send an empty chunk to indicate the end of the file and to start uploading.
 
@@ -24,7 +24,7 @@ Command JSON object keys are:
   * `package_file_name`: the original file name of the package to be sent
   * `package_file_sha256`: the SHA-256 hash of the package file
 
-### Response
+### Response
 
 A single frame, containing a JSON object with keys:
 
