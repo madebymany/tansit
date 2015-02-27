@@ -11,6 +11,7 @@ import Data.Maybe
 import Data.Text (Text)
 import Network.JsonRpc.Server
 import System.Directory
+import System.Environment
 import System.Exit
 import System.FilePath
 import System.IO.Temp
@@ -55,11 +56,16 @@ packageFileHashDoesntMatch = 502
 debS3OutputParseFailedErrorNo = -32000
 
 main :: IO ()
-main = runZMQ $ withSystemTempDirectory "tansit-packages" $ \tempDir -> do
-    liftIO $ putStrLn $ "temp dir: " ++ tempDir
-    sock <- socket Router
-    bind sock "ipc://tansit.ipc"
-    forever $ handleClient sock tempDir
+main = do
+    endpoint <- getEndpoint <$> getArgs
+    runZMQ $ withSystemTempDirectory "tansit-packages" $ \tempDir -> do
+        liftIO $ putStrLn $ "temp dir: " ++ tempDir
+        sock <- socket Router
+        bind sock endpoint
+        forever $ handleClient sock tempDir
+    where getEndpoint as = case as of
+                             []    -> "ipc://tansit.ipc"
+                             e : _ -> e
 
 handleClient :: Socket z Router -> FilePath -> ZMQ z ()
 handleClient sock tempDir = do
@@ -104,6 +110,7 @@ sendPackageData = toMethod "send_package_data" f $ Required "file_name" :+: Requ
           f fileName bytes = do
             dir <- packageDir
             liftIO $ createDirectoryIfMissing True dir
+            --- FIXME: filter filename to stop path traversal
             liftIO $ B.appendFile (dir </> Text.unpack fileName) bytes
             return 0
                 
@@ -111,6 +118,7 @@ uploadPackage = toMethod "upload" f (Required "file_name" :+: Required "file_sha
     where f :: Text -> Text -> Text -> Text -> Text -> Text -> RpcResult Server Text
           f fileName fileHash bucket codename component arch = do
             dir <- packageDir
+            --- FIXME: filter filename to stop path traversal
             let pn = dir </> Text.unpack fileName
             pnExists <- liftIO $ doesFileExist pn
             unless pnExists $
