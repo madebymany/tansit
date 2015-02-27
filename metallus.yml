@@ -1,0 +1,30 @@
+packages:
+  branch_codenames:
+    master: unstable
+    production: stable
+
+jobs:
+  tansit:
+    builder: haskell
+    base: "quay.io/madebymany/build-bases:trusty"
+    apt_repos:
+      - "ppa:hvr/ghc"
+    build_depends:
+      - "pkg-config" # needed for zeromq4-haskell apparently for some reason
+      - "ghc-7.8.3"
+      - "cabal-install-1.22"
+      - "libzmq3-dev=4.0.4+dfsg-2"
+    # persist:
+      # - '${SOURCE_ROOT}/.cabal-sandbox'
+      # - '${SOURCE_ROOT}/cabal.sandbox.config'
+    promote_through:
+      - unstable
+      - stable
+    packages:
+      - name: tansit
+        repos:
+          - mxm-public
+        target: install
+        version: "1.0.0.0" # remember to update tansit.cabal too
+        depends:
+          - "libzmq3 (>= 4.0.4)"
