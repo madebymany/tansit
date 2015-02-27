@@ -26,6 +26,7 @@ import qualified Data.ByteString.Lazy as LB
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.IO as TIO
 
 import Tansit.Parser
 
@@ -59,9 +60,10 @@ main :: IO ()
 main = do
     endpoint <- getEndpoint <$> getArgs
     runZMQ $ withSystemTempDirectory "tansit-packages" $ \tempDir -> do
-        liftIO $ putStrLn $ "temp dir: " ++ tempDir
+        liftIO $ putStrLn $ "Tansit starting!\nTemp dir: " ++ tempDir
         sock <- socket Router
         bind sock endpoint
+        liftIO $ putStrLn $ "Listening on " ++ endpoint
         forever $ handleClient sock tempDir
     where getEndpoint as = case as of
                              []    -> "ipc://tansit.ipc"
@@ -173,13 +175,17 @@ rpcRunDebS3 cmd opts args = do
 
 runDebS3 :: Text -> [(Text, Maybe Text)] -> [Text] -> IO (Bool, Text, Text)
 runDebS3 cmd opts posArgs = do
-    -- XXX: should read from handles straight into a Text, using createProcess
-    (exitCode, out, err) <- readProcessWithExitCode "deb-s3" (fmap Text.unpack args) ""
-    return (exitCode == ExitSuccess, Text.pack out, Text.pack err)
-    where args = cmd : posArgs ++ fmap makeOpt opts
+    (_, Just stdOut, Just stdErr, ph) <- createProcess debS3
+    out <- TIO.hGetContents stdOut
+    err <- TIO.hGetContents stdErr
+    exitCode <- waitForProcess ph
+    return (exitCode == ExitSuccess, out, err)
+    where args = Text.unpack <$> cmd : posArgs ++ fmap makeOpt opts
           makeOpt (k, v) = Text.concat ["--", k, case v of
                                                    Just s -> Text.append "=" s
                                                    Nothing -> Text.empty]
+          debS3 = (proc "deb-s3" args) {
+              std_out = CreatePipe, std_err = CreatePipe }
 
 -- Other helpers
 
