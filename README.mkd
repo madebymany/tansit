@@ -1,0 +1,38 @@
+# Tansit
+
+deb-s3 as-a-service.
+
+Note this is intentionally single-threaded. The point of this service is to
+serialise usage of deb-s3 so that race conditions are avoided. However,
+races only happen over one bucket, so this could be made more intelligent
+and parallelise calls made to separate buckets.
+
+## Protocol
+
+This is a bit of an experiment with [ZeroMQ](http://zeromq.org) (4.0). "Why didn't you just use HTTP?", you might ask. Well, it's an experiment, like I said. Did it succeed? Well, the file transfer is the only questionable bit, I think. It's [JSON-RPC 2.0](http://www.jsonrpc.org/specification) over ZeroMQ. There's a Python library I wrote for it at https://github.com/wiltd/jsonrpc2-zeromq-python
+
+There are the following RPC calls available:
+
+* `send_package_data` — You must upload a package to the service before you can `upload` it with deb-s3. Please set a low-ish sending high-water mark on your client socket otherwise you'll kill the server and messages will drop and it won't work. Parameters:
+  * `file_name` — String, required. The file name to save under. Must be the same as when you call `upload`.
+  * `data` — String, URL-safe Base64-encoded; required. The next chunk of the file you are uploading. Client chooses the chunk size.
+* `upload` — Calls deb-s3 to upload an already-sent package to the repository. Returns deb-s3 command output.
+  * `file_name` — String, required. The file name the package was sent as.
+  * `file_sha256_hash` — String, required. The SHA256 hash of the file, as hex digits.
+  * Common arguments, as below.
+* `short_list` — Lists packages in repository, filtered by common options. Returns an array of objects with keys `package_name`, `version`, `arch`.
+* `long_list` — Lists packages in repository, filtered by common options. Returns array of objects representing full definition in manifest.
+* `copy` — Copies package from one section of repository to another section (not to another repository, use `upload` for that.). Returns deb-s3 output.
+  * `package` — String, required. Package name.
+  * `to_codename` — String, required. Destination codename.
+  * `to_component` — String, required. Destination component.
+  * `versions` — Array of strings, optional. Versions to copy. Default is all.
+  * Common arguments give source package details.
+
+### Error codes
+
+* 500 — deb-s3 call failed for some reason. Stderr returned as error message.
+* 501 — Package file doesn't exist, if `upload` is called with a package that hasn't been uploaded.
+* 502 — Package file does exist but doesn't match hash given.
+
+Other error codes as JSON-RPC 2.0 spec.
