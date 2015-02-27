@@ -107,18 +107,18 @@ shortList, longList, packageCopy, sendPackageData, uploadPackage :: Method Serve
 
 sendPackageData = toMethod "send_package_data" f $ Required "file_name" :+: Required "data" :+: ()
     where f :: Text -> B.ByteString -> RpcResult Server Int
-          f fileName bytes = do
+          f unsafeFileName bytes = do
             dir <- packageDir
             liftIO $ createDirectoryIfMissing True dir
-            --- FIXME: filter filename to stop path traversal
+            let fileName = sanitiseFileName unsafeFileName
             liftIO $ B.appendFile (dir </> Text.unpack fileName) bytes
             return 0
                 
 uploadPackage = toMethod "upload" f (Required "file_name" :+: Required "file_sha256_hash" :+: commonArgs)
     where f :: Text -> Text -> Text -> Text -> Text -> Text -> RpcResult Server Text
-          f fileName fileHash bucket codename component arch = do
+          f unsafeFileName fileHash bucket codename component arch = do
             dir <- packageDir
-            --- FIXME: filter filename to stop path traversal
+            let fileName = sanitiseFileName unsafeFileName
             let pn = dir </> Text.unpack fileName
             pnExists <- liftIO $ doesFileExist pn
             unless pnExists $
@@ -190,3 +190,6 @@ packageDir = do
 
 byteStringToHex :: B.ByteString -> Text
 byteStringToHex = TE.decodeUtf8 . LB.toStrict . BB.toLazyByteString . BB.byteStringHex
+
+sanitiseFileName :: Text -> Text
+sanitiseFileName = Text.filter $ not . isPathSeparator
