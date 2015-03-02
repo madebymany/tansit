@@ -10,6 +10,7 @@ import Control.Monad.Reader
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON, (.=))
 import Data.Foldable (fold)
 import Data.Map (Map)
+import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import Network.JsonRpc.Server
 import System.Directory
@@ -117,11 +118,14 @@ handleRequest sock req = do
 serverMethods :: Methods Server
 serverMethods = toMethods [shortList, longList, packageCopy, sendPackageData, uploadPackage]
 
-commonArgs :: a :+: (Text :+: (Text :+: (Text :+: ())))
+commonArgs :: Text :+: Text :+: Text :+: Text :+: ()
 commonArgs = Required "bucket" :+:
-             Optional "codename" ("stable" :: Text) :+:
-             Optional "component" ("main" :: Text) :+:
-             Optional "arch" ("amd64" :: Text) :+: ()
+    Optional "codename" ("stable" :: Text) :+:
+    Optional "component" ("main" :: Text) :+:
+    Optional "arch" ("amd64" :: Text) :+: ()
+
+commonWriteArgs :: Text :+: Bool :+: Text :+: Text :+: Text :+: Text :+: ()
+commonWriteArgs = Optional "cache_control" ("" :: Text) :+: Optional "preserve_versions" False :+: commonArgs
 
 shortList, longList, packageCopy, sendPackageData, uploadPackage :: Method Server
 
@@ -136,9 +140,9 @@ sendPackageData = toMethod "send_package_data" f $ Required "file_name" :+: Requ
             liftIO $ B.appendFile (dir </> Text.unpack fileName) bytes
             return 0
                 
-uploadPackage = toMethod "upload" f (Required "file_name" :+: Required "file_sha256_hash" :+: commonArgs)
-    where f :: Text -> Text -> Text -> Text -> Text -> Text -> RpcResult Server Text
-          f unsafeFileName fileHash bucket codename component arch = do
+uploadPackage = toMethod "upload" f $ Required "file_name" :+: Required "file_sha256_hash" :+: commonWriteArgs
+    where f :: Text -> Text -> Text -> Bool -> Text -> Text -> Text -> Text -> RpcResult Server Text
+          f unsafeFileName fileHash cacheControl preserveVersions bucket codename component arch = do
             dir <- packageDir
             let fileName = sanitiseFileName unsafeFileName
             let pn = dir </> Text.unpack fileName
@@ -149,7 +153,8 @@ uploadPackage = toMethod "upload" f (Required "file_name" :+: Required "file_sha
             let pHash = byteStringToHex $ SHA256.hashlazy pToHash
             unless (Text.toLower pHash == Text.toLower fileHash) $
                 throwError $ rpcError packageFileHashDoesntMatch "file doesn't match given hash"
-            out <- rpcRunDebS3WithCommonArgs "upload" [] [Text.pack pn] bucket codename component arch
+            let opts = writeArgsAsOpts cacheControl preserveVersions
+            out <- rpcRunDebS3WithCommonArgs "upload" opts [Text.pack pn] bucket codename component arch
             liftIO $ removeFile pn
             return out
 
@@ -171,12 +176,13 @@ longList = toMethod "long_list" f commonArgs
                 Left s -> throwError $ rpcError debS3OutputParseFailedErrorNo $ Text.pack s
                 Right l -> return l
 
-packageCopy = toMethod "copy" f $ Required "package" :+: Required "to_codename" :+: Required "to_component" :+: Optional "versions" [] :+: commonArgs
-    where f :: Text -> Text -> Text -> [Text] -> Text -> Text -> Text -> Text -> RpcResult Server Text
-          f package to_codename to_component versions bucket codename component arch =
-            let opts = case versions of
-                         [] -> []
-                         vs -> [("versions", Just $ Text.unwords vs)] in
+packageCopy = toMethod "copy" f $ Required "package" :+: Required "to_codename" :+: Required "to_component" :+: Optional "versions" [] :+: commonWriteArgs
+    where f :: Text -> Text -> Text -> [Text] -> Text -> Bool -> Text -> Text -> Text -> Text -> RpcResult Server Text
+          f package to_codename to_component versions cacheControl preserveVersions bucket codename component arch =
+            let opts = writeArgsAsOpts cacheControl preserveVersions ++
+                          case versions of
+                            [] -> []
+                            vs -> [("versions", Just $ Text.unwords vs)] in
                 rpcRunDebS3WithCommonArgs "copy" opts [package, to_codename, to_component] bucket codename component arch
           
 -- Running deb-s3
@@ -225,3 +231,14 @@ byteStringToHex = TE.decodeUtf8 . LB.toStrict . BB.toLazyByteString . BB.byteStr
 
 sanitiseFileName :: Text -> Text
 sanitiseFileName = Text.filter $ not . isPathSeparator
+
+writeArgsAsOpts :: Text -> Bool -> [(Text, Maybe Text)]
+writeArgsAsOpts cacheControl preserveVersions = 
+    catMaybes [
+        if Text.null cacheControl
+           then Nothing
+           else Just ("cache-control", Just cacheControl),
+        if preserveVersions
+           then Just ("preserve-versions", Nothing)
+           else Nothing
+        ]
