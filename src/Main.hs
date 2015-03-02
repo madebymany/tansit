@@ -3,11 +3,13 @@
 module Main (main) where
 
 import Control.Applicative
-import Control.Monad.Error
+import Control.Concurrent
+import Control.Exception (bracket_)
+import Control.Monad.Except
 import Control.Monad.Reader
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON, (.=))
+import Data.Foldable (fold)
 import Data.Map (Map)
-import Data.Maybe
 import Data.Text (Text)
 import Network.JsonRpc.Server
 import System.Directory
@@ -32,8 +34,10 @@ import Tansit.Parser
 
 type Server = ReaderT Request IO
 
-data Request = Request { reqId :: B.ByteString, reqBody :: B.ByteString, tempDir :: FilePath }
-    deriving (Eq, Show)
+data Request = Request {
+             reqId :: B.ByteString, reqIdChain :: [B.ByteString],
+             reqBody :: B.ByteString, tempDir :: FilePath,
+             debS3MVar :: MVar () }
 
 data ShortListResult = ShortListResult { shortListPackageName :: Text, shortListVersion :: Text, shortListArch :: Text}
     deriving (Eq, Show)
@@ -56,35 +60,51 @@ packageFileDoesntExistErrorNo = 501
 packageFileHashDoesntMatch = 502
 debS3OutputParseFailedErrorNo = -32000
 
+defaultPublicEndpiont, workersEndpoint :: String
+defaultPublicEndpiont = "ipc://tansit.ipc"
+workersEndpoint = "inproc://workers"
+
 main :: IO ()
 main = do
     endpoint <- getEndpoint <$> getArgs
     runZMQ $ withSystemTempDirectory "tansit-packages" $ \tempDir -> do
         liftIO $ putStrLn $ "Tansit starting!\nTemp dir: " ++ tempDir
+
+        debS3MVar <- liftIO $ newMVar ()
+
         sock <- socket Router
         bind sock endpoint
+
+        sockWorkers <- socket Dealer
+        bind sockWorkers workersEndpoint
+
+        replicateM_ 10 $ async $ serverWorker tempDir debS3MVar
+
         liftIO $ putStrLn $ "Listening on " ++ endpoint
-        forever $ handleClient sock tempDir
+        proxy sock sockWorkers Nothing
+
     where getEndpoint as = case as of
-                             []    -> "ipc://tansit.ipc"
+                             []    -> defaultPublicEndpiont
                              e : _ -> e
 
-handleClient :: Socket z Router -> FilePath -> ZMQ z ()
-handleClient sock tempDir = do
-    mayReq <- parseRequest <$> receiveMulti sock
-    case mayReq of
-        Just req -> handleRequest sock req
-        Nothing -> return () 
+serverWorker :: FilePath -> MVar () -> ZMQ z ()
+serverWorker tempDir debS3MVar = do
+    sock <- socket Router
+    connect sock workersEndpoint
+
+    forever $ do
+        mayReq <- parseRequest <$> receiveMulti sock
+        case mayReq of
+            Just req -> handleRequest sock req
+            Nothing  -> return ()
 
     where parseRequest :: [B.ByteString] -> Maybe Request
-          parseRequest parts = do
-              reqId <- safeHead parts
-              let reqBody = fromMaybe B.empty $ safeLast parts
+          parseRequest listParts = do
+              parts <- NonEmpty.nonEmpty listParts
+              let reqIdChain = NonEmpty.take 2 parts
+              let reqId = fold reqIdChain
+              let reqBody = NonEmpty.last parts
               return Request {..}
-              where safeHead [] = Nothing
-                    safeHead (x:_) = Just x
-                    safeLast [] = Nothing
-                    safeLast x = Just $ last x
 
 handleRequest :: Socket z Router -> Request -> ZMQ z ()
 handleRequest sock req = do
@@ -92,7 +112,7 @@ handleRequest sock req = do
     case mayResp of
         Just body -> reply $ LB.toStrict body
         Nothing -> return ()
-    where reply s = sendMulti sock $ NonEmpty.fromList [reqId req, s]
+    where reply s = sendMulti sock $ NonEmpty.fromList $ reqIdChain req ++ [s]
 
 serverMethods :: Methods Server
 serverMethods = toMethods [shortList, longList, packageCopy, sendPackageData, uploadPackage]
@@ -168,10 +188,16 @@ rpcRunDebS3WithCommonArgs cmd opts args bucket codename component arch =
 
 rpcRunDebS3 :: Text -> [(Text, Maybe Text)] -> [Text] -> RpcResult Server Text
 rpcRunDebS3 cmd opts args = do
-    (success, output, err) <- liftIO $ runDebS3 cmd opts args
+    mVar <- debS3MVar <$> ask
+    (success, output, err) <- lockWhenWriting mVar $
+        runDebS3 cmd opts args
     if success
         then return output
         else throwError $ rpcError debS3FailedErrorNo err
+    where lockWhenWriting mv a = liftIO $
+              if cmd `elem` ["list"]
+                  then a
+                  else bracket_ (takeMVar mv) (putMVar mv ()) a
 
 runDebS3 :: Text -> [(Text, Maybe Text)] -> [Text] -> IO (Bool, Text, Text)
 runDebS3 cmd opts posArgs = do
