@@ -189,6 +189,7 @@ rpcRunDebS3 cmd opts args = do
 
 runDebS3 :: Text -> [(Text, Maybe Text)] -> [Text] -> IO (Bool, Text, Text)
 runDebS3 cmd opts posArgs = do
+    infoLog $ "Running deb-s3 with args: " ++ show args
     (_, Just stdOut, Just stdErr, ph) <- createProcess debS3
     out <- TIO.hGetContents stdOut
     err <- TIO.hGetContents stdErr
@@ -230,3 +231,6 @@ keyIdOpt = do
     signAs <- signAs <$> ask
     return ("sign", Just $ Text.pack signAs)
 
+-- Will probably do something more sophisticated in future
+infoLog :: String -> IO ()
+infoLog s = liftIO $ putStrLn s
