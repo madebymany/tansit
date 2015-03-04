@@ -79,7 +79,7 @@ serverWorker tempDir signAs debS3MVar = do
           parseRequest listParts = do
               parts <- NonEmpty.nonEmpty listParts
               let reqIdChain = NonEmpty.take 2 parts
-              let reqId = fold reqIdChain
+              let reqId = reqIdChain !! 1
               let reqBody = NonEmpty.last parts
               return Request {..}
 
