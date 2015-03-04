@@ -7,9 +7,7 @@ import Control.Monad (void)
 import Data.Attoparsec.Text
 import Data.Char (ord)
 import Data.Map (Map)
-import Data.Maybe
 import Data.Text (Text)
-import qualified Data.Attoparsec.Text as P
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 

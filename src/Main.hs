@@ -2,15 +2,12 @@
 
 module Main (main) where
 
-import Control.Applicative
 import Control.Concurrent
 import Control.Monad.Except
-import Data.Maybe (fromMaybe)
 import Data.Version (showVersion)
 import Paths_tansit (version)
 import System.Console.GetOpt
 import System.Environment
-import System.Exit
 import System.IO.Temp
 import System.ZMQ4.Monadic hiding (version)
 
@@ -36,7 +33,7 @@ parseOpts argv =
 
 main :: IO ()
 main = do
-    (opts, args) <- getArgs >>= parseOpts
+    (opts, _) <- getArgs >>= parseOpts
     let (endpoint, signAs) = findOpts opts
     if Version `elem` opts
        then putStrLn $ showVersion version
