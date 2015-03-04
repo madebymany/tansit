@@ -137,6 +137,7 @@ uploadPackage = toMethod "upload" f $ Required "file_name" :+: Required "file_sh
             out <- rpcRunDebS3WithCommonArgs "upload" opts [Text.pack pn] bucket codename component arch
 
             liftIO $ removeFile pn
+            liftIO $ removeDirIfEmpty dir
             return out
 
 shortList = toMethod "short_list" f commonArgs
@@ -230,6 +231,14 @@ keyIdOpt :: RpcResult Server (Text, Maybe Text)
 keyIdOpt = do
     signAs <- signAs <$> ask
     return ("sign", Just $ Text.pack signAs)
+
+removeDirIfEmpty :: FilePath -> IO ()
+removeDirIfEmpty dir = do
+    isEmpty <- listingEmpty <$> getDirectoryContents dir
+    when isEmpty $ removeDirectory dir
+    where listingEmpty l = case l of
+                               [".", ".."] -> True
+                               _           -> False
 
 -- Will probably do something more sophisticated in future
 infoLog :: String -> IO ()
