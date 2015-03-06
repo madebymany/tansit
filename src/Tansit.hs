@@ -8,7 +8,6 @@ import Control.Exception (bracket_)
 import Control.Monad.Except
 import Control.Monad.Reader
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON, (.=))
-import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
@@ -39,7 +38,7 @@ data Request = Request {
              reqBody :: B.ByteString, tempDir :: FilePath,
              signAs :: String, debS3MVar :: MVar () }
 
-data ShortListResult = ShortListResult { shortListPackageName :: Text, shortListVersion :: Text, shortListArch :: Text}
+data ShortListResult = ShortListResult { _shortListPackageName :: Text, _shortListVersion :: Text, _shortListArch :: Text}
     deriving (Eq, Show)
 
 type LongListResult = Map Text Text

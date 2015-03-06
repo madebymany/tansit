@@ -72,3 +72,4 @@ executable tansit
   ghc-options:
     -threaded
     -Wall
+    -fno-warn-orphans
