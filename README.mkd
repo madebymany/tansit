@@ -9,7 +9,7 @@ and parallelise calls made to separate buckets.
 
 ## Protocol
 
-This is a bit of an experiment with [ZeroMQ](http://zeromq.org) (4.0). "Why didn't you just use HTTP?", you might ask. Well, it's an experiment, like I said. Did it succeed? Well, the file transfer is the only questionable bit, I think. It's [JSON-RPC 2.0](http://www.jsonrpc.org/specification) over ZeroMQ. There's a Python library I wrote for it at https://github.com/wiltd/jsonrpc2-zeromq-python
+This is a bit of an experiment with [ZeroMQ](http://zeromq.org) (4.0). "Why didn't you just use HTTP?", you might ask. Well, it's an experiment, like I said. Did it succeed? Well, the file transfer is the only questionable bit, I think. It's [JSON-RPC 2.0](http://www.jsonrpc.org/specification) over ZeroMQ. There's a Python library I wrote for it at [dwb/jsonrpc2-zeromq-python](https://github.com/dwb/jsonrpc2-zeromq-python)
 
 There are the following RPC calls available:
 
