@@ -42,7 +42,7 @@ main = do
                                              BindEndpoint s -> (s, j)
                                              SignAs       s -> (i, s)
                                              _              -> (i, j))
-                          ("ipc://tansit.ipc", error "--sign-as required")
+                          ("ipc:///tmp/tansit.zmq", error "--sign-as required")
 
 
 startServer :: String -> String -> IO ()
