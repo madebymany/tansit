@@ -8,6 +8,7 @@ import Data.Version (showVersion)
 import Paths_tansit (version)
 import System.Console.GetOpt
 import System.Environment
+import System.IO
 import System.IO.Temp
 import System.ZMQ4.Monadic hiding (version)
 
@@ -33,6 +34,9 @@ parseOpts argv =
 
 main :: IO ()
 main = do
+    hSetBuffering stdout LineBuffering
+    hSetBuffering stderr LineBuffering
+
     (opts, _) <- getArgs >>= parseOpts
     let (endpoint, signAs) = findOpts opts
     if Version `elem` opts

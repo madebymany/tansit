@@ -11,7 +11,7 @@ name:                tansit
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
 -- *** REMEMBER *** to update metallus.yml too
-version:             1.0.0.2
+version:             1.0.0.3
 
 -- A short (one-line) description of the package.
 synopsis:            A microservice frontend for deb-s3
