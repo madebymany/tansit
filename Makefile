@@ -12,6 +12,7 @@ install:
 	install -o root -g root -m 0755 tansit-kms '$(BIN_PATH)/tansit-kms'
 
 install-runit:
+	mkdir -p /etc/sv /etc/service
 	cp -R runit '$(RUNIT_DIR)'
 	chown -R root:root  '$(RUNIT_DIR)'
 	ln -s '$(RUNIT_DIR)' '$(RUNIT_START_DIR)'
