@@ -2,8 +2,8 @@
 
 set -eo pipefail
 
-if [[ -z $GPG_ENCRYPTED_SECRET_KEY_URL ]]; then
-  echo "You must provide GPG_ENCRYPTED_SECRET_KEY_URL, to be used by 'aws s3 cp'"
+if [[ -z $TANSIT_GPG_ENCRYPTED_SECRET_KEY_URL ]]; then
+  echo "You must provide TANSIT_GPG_ENCRYPTED_SECRET_KEY_URL, to be used by 'aws s3 cp'"
   exit 1
 fi
 
@@ -13,7 +13,7 @@ mkdir "$GNUPGHOME"
 
 encrypted_key="/dev/shm/gpgsecret.key.enc"
 
-aws s3 cp "$GPG_ENCRYPTED_SECRET_KEY_URL" "$encrypted_key"
+aws s3 cp "$TANSIT_GPG_ENCRYPTED_SECRET_KEY_URL" "$encrypted_key"
 echo "Importing key..."
 aws kms decrypt --ciphertext-blob "fileb://${encrypted_key}" \
     --query Plaintext --output text | \
