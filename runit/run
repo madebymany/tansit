@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -e
+
+exec 2>&1
+
+. "$(which global-env)"
+
+if [[ -f /etc/default/tansit ]]; then
+  . /etc/default/tansit
+fi
+
+exec chpst -u nobody:nogroup -/ \
+  tansit-kms -b "${TANSIT_ENDPOINT}" -s "${TANSIT_KEY_ID}"

@@ -1,0 +1,3 @@
+#!/bin/bash
+
+exec runit-finish "$1" tansit
