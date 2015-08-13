@@ -33,7 +33,7 @@ jobs:
         repos:
           - mxm-public
         target: install-runit
-        version: "1.0.0"
+        version: "1.0.1"
         depends:
           - "tansit"
           - "runit-common"
