@@ -2,7 +2,6 @@
 
 module Tansit (serverWorker, workersEndpoint) where
 
-import Control.Applicative
 import Control.Concurrent
 import Control.Exception (bracket_)
 import Control.Monad.Except
@@ -90,8 +89,8 @@ handleRequest sock req = do
         Nothing -> return ()
     where reply s = sendMulti sock $ NonEmpty.fromList $ reqIdChain req ++ [s]
 
-serverMethods :: Methods Server
-serverMethods = toMethods [shortList, longList, packageCopy, sendPackageData, uploadPackage]
+serverMethods :: [Method Server]
+serverMethods = [shortList, longList, packageCopy, sendPackageData, uploadPackage]
 
 commonArgs :: Text :+: Text :+: Text :+: Text :+: ()
 commonArgs = Required "bucket" :+:
